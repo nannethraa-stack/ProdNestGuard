@@ -6,6 +6,7 @@
 #include "nvs_flash.h"
 #include "camera_driver.h"
 #include "i2s_mic.h"
+#include "ai_inference.h"
 
 static const char *TAG = "NESTGUARD_MAIN";
 
@@ -26,19 +27,26 @@ void network_task(void *pvParameters) {
 void inference_task(void *pvParameters) {
     ESP_LOGI(TAG, "Starting Sensor & Edge AI Inference Task on Core 1");
     
-    // Allocate buffers for audio samples and image frames
     size_t audio_bytes_read = 0;
     int32_t audio_buffer[512];
 
     while (1) {
-        // 1. Read audio chunk from I2S DMA buffer
+        // 1. Read audio chunk from I2S DMA buffer and run edge cry-matching inference
         i2s_read_audio(audio_buffer, sizeof(audio_buffer), &audio_bytes_read);
+        bool cry_detected = run_audio_inference(audio_buffer, audio_bytes_read);
+        if (cry_detected) {
+            ESP_LOGW(TAG, "CRITICAL: Audio anomaly/cry detected by edge model!");
+            // TODO: Trigger alert payload queue for Core 0 network transmission
+        }
         
-        // 2. Grab frame from OV2640 Camera via PSRAM buffer
+        // 2. Grab frame from OV2640 Camera via PSRAM buffer and run obstruction check
         camera_fb_t *fb = capture_camera_frame();
         if (fb) {
-            // TODO: Pass frame to local vision model / obstruction check
-            // ESP_LOGI(TAG, "Captured frame: %dx%d, len: %u", fb->width, fb->height, fb->len);
+            bool obstruction_detected = run_vision_inference(fb);
+            if (obstruction_detected) {
+                ESP_LOGW(TAG, "CRITICAL: Breathing zone obstruction detected by vision model!");
+                // TODO: Trigger visual alert queue
+            }
             
             // Return frame buffer back to driver pool
             release_camera_frame(fb);
@@ -62,7 +70,11 @@ void app_main(void) {
     // Initialize Hardware Drivers
     ESP_ERROR_CHECK(init_camera());
     init_i2s_mic();
-    ESP_LOGI(TAG, "Hardware drivers initialized successfully.");
+    
+    // Initialize Edge AI Models & Tensor Arena in PSRAM
+    init_edge_ai_models();
+    
+    ESP_LOGI(TAG, "Hardware drivers and AI runtime initialized successfully.");
 
     // Create FreeRTOS Tasks pinned to specific cores
     xTaskCreatePinnedToCore(
