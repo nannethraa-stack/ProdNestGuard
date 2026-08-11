@@ -3,81 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NestGuard - Complete Nursery Monitoring Station</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
-        header { background: #004d40; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; }
-        h1 { margin: 0; font-size: 24px; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #00796b; color: white; }
-        .alert-row { background-color: #ffebee; font-weight: bold; }
-        .badge-warning { background: #d32f2f; color: white; padding: 4px 8px; border-radius: 4px; }
-        .badge-normal { background: #388e3c; color: white; padding: 4px 8px; border-radius: 4px; }
-    </style>
+    <title>NestGuard Live Infant Monitoring Station</title>
+    <!-- Bootstrap CSS for clean hospital-grade UI styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
+    <div class="container-fluid py-4">
+        <div class="p-3 mb-4 bg-success text-white rounded shadow-sm">
+            <h2 class="mb-0">🏥 NestGuard Live Infant Monitoring Station (4-Class AI)</h2>
+        </div>
 
-    <header>
-        <h1>🏥 NestGuard Live Infant Monitoring Station</h1>
-    </header>
-
-    <div class="card">
-        <h2>Real-Time Nursery Telemetry & Alerts</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Room / Device</th>
-                    <th>Event State</th>
-                    <th>Cry Confidence</th>
-                    <th>Ammonia (ppm)</th>
-                    <th>Diaper Status</th>
-                    <th>Max Temp (°C)</th>
-                </tr>
-            </thead>
-            <tbody id="event-log"></tbody>
-        </table>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Real-Time Nursery Telemetry & Granular AI Diagnostics</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Room / Device</th>
+                                <th>Event State</th>
+                                <th>Confidence</th>
+                                <th>Probabilistic Diagnosis (4-Class)</th>
+                                <th>Ammonia (ppm)</th>
+                                <th>Diaper Status</th>
+                                <th>Max Temp (°C)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="telemetry-table-body">
+                            <!-- Live data rows will be dynamically injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Socket.io client script served automatically by the backend -->
+    <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const eventLog = document.getElementById('event-log');
 
-        fetch('/api/events')
-            .then(res => res.json())
-            .then(data => data.forEach(row => appendEventRow(row)));
-
-        socket.on('live_alert', (data) => {
-            appendEventRow(data, true);
-        });
-
-        function appendEventRow(data, isNew = false) {
+        socket.on('telemetry_update', function(data) {
+            const tbody = document.getElementById('telemetry-table-body');
             const row = document.createElement('tr');
-            const isAlert = data.diaper_status?.includes('SOILED') || data.event_type?.includes('CRYING') || data.max_temp > 38.5;
-            
-            if (isAlert) {
-                row.classList.add('alert-row');
+
+            // Dynamically assign badge colors based on 4-class event types
+            let badgeClass = 'bg-secondary';
+            if (data.event_type.includes('PAIN')) {
+                badgeClass = 'bg-danger';
+            } else if (data.event_type.includes('HUNGER')) {
+                badgeClass = 'bg-warning text-dark';
+            } else if (data.event_type.includes('DISCOMFORT')) {
+                badgeClass = 'bg-info text-dark';
+            } else if (data.event_type.includes('THERMAL') || data.event_type.includes('AMMONIA')) {
+                badgeClass = 'bg-danger';
             }
+
+            const timestamp = new Date().toLocaleTimeString();
+            const confidenceVal = data.confidence ? (data.confidence * 100).toFixed(1) + '%' : 'N/A';
 
             row.innerHTML = `
-                <td>${new Date(data.timestamp).toLocaleTimeString()}</td>
-                <td><strong>${data.device_id}</strong></td>
-                <td>${data.event_type}</td>
-                <td>${data.confidence > 0.5 ? (data.confidence * 100).toFixed(0) + '%' : 'Silent'}</td>
-                <td>${data.ammonia_ppm !== undefined ? data.ammonia_ppm + ' ppm' : 'N/A'}</td>
-                <td><span class="${data.diaper_status?.includes('SOILED') ? 'badge-warning' : 'badge-normal'}">${data.diaper_status || 'NORMAL'}</span></td>
-                <td>${data.max_temp !== null ? data.max_temp.toFixed(1) + ' °C' : 'N/A'}</td>
+                <td>${timestamp}</td>
+                <td><strong>${data.device_id || 'portenta_room_01'}</strong></td>
+                <td><span class="badge ${badgeClass}">${data.event_type}</span></td>
+                <td>${confidenceVal}</td>
+                <td><strong>${data.probabilistic_diagnosis || 'Normal'}</strong></td>
+                <td>${data.ammonia_ppm} ppm</td>
+                <td><span class="badge ${data.diaper_status && data.diaper_status.includes('SOILED') ? 'bg-danger' : 'bg-success'}">${data.diaper_status}</span></td>
+                <td>${data.max_temp} °C</td>
             `;
 
-            if (isNew) {
-                eventLog.prepend(row);
-            } else {
-                eventLog.appendChild(row);
-            }
-        }
+            // Insert new live updates at the top of the table
+            tbody.prepend(row);
+        });
     </script>
 </body>
 </html>
