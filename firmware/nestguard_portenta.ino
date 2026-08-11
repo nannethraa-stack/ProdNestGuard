@@ -2,67 +2,60 @@
 #include <Wire.h>
 #include <Adafruit_MLX90640.h>
 
-// --- Network Credentials ---
 const char* ssid = "YOUR_HOSPITAL_WIFI_SSID";
 const char* password = "YOUR_HOSPITAL_WIFI_PASSWORD";
-
-// --- Backend Server Details ---
-const char* serverIP = "YOUR_BACKEND_SERVER_IP"; // e.g., "192.168.1.50"
-const int serverPort = 3000;
+const char* serverIP = "YOUR_BACKEND_SERVER_IP";
+const int serverPort = 5000;
 
 WiFiClient client;
 Adafruit_MLX90640 mlx;
-float mlx90640[32 * 24]; // Thermal camera frame buffer
+float mlx90640[32 * 24];
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
 
-  // Initialize Thermal Camera (MLX90640)
   Wire.begin();
   if (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &Wire)) {
-    Serial.println("❌ MLX90640 thermal camera not found! Check wiring.");
+    Serial.println("❌ Thermal camera not found!");
     while (1) delay(1000);
   }
-  
-  // Set thermal sensor refresh rate (e.g., 8Hz)
   mlx.setRefreshRate(MLX9064_8_HZ);
-  Serial.println("✅ Thermal Camera Initialized.");
 
-  // Connect to Wi-Fi
   WiFi.begin(ssid, password);
-  Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
   }
-  Serial.println("\n✅ Connected to Wi-Fi. IP Address: " + WiFi.localIP().toString());
 }
 
 void loop() {
-  // 1. Read Thermal Frame Data
-  int status = mlx.getFrame(mlx90640);
-  if (status < 0) {
-    Serial.println("⚠️ Failed to read thermal frame");
-    delay(500);
-    return;
-  }
-
-  // Find maximum temperature in the matrix (simple safety check)
+  // 1. Read Thermal Data
+  mlx.getFrame(mlx90640);
   float maxTemp = -273.15;
   for (int i = 0; i < 768; i++) {
-    if (mlx90640[i] > maxTemp) {
-      maxTemp = mlx90640[i];
-    }
+    if (mlx90640[i] > maxTemp) maxTemp = mlx90640[i];
   }
 
-  Serial.print("Current Max Temperature: ");
-  Serial.print(maxTemp);
-  Serial.println(" °C");
+  // 2. Simulate/Read Audio (Cry Detection) & Gas Sensor (Ammonia / Diaper)
+  // In production, PDM microphone buffers feed your on-chip TinyML audio model
+  bool cryDetected = (random(0, 10) > 8); // Example trigger
+  float cryConfidence = cryDetected ? 0.94 : 0.05;
+  
+  // Gas sensor (e.g., MQ-137 / MQ-135 for ammonia VOCs)
+  float ammoniaPpm = random(1, 25) / 10.0; // ppm reading
+  String diaperStatus = (ammoniaPpm > 1.8) ? "SOILED / CHANGE REQUIRED" : "NORMAL";
+  String eventType = cryDetected ? "INFANT_CRYING" : (ammoniaPpm > 1.8 ? "AMMONIA_SPIKE" : "NORMAL_MONITORING");
 
-  // 2. Send Data to Node.js Backend if connected
+  // 3. Send Payload to Node.js Backend
   if (client.connect(serverIP, serverPort)) {
-    String payload = "{\"device_id\":\"portenta_01\",\"max_temp\":" + String(maxTemp) + "}";
+    String payload = "{"
+      "\"device_id\":\"room_101\","
+      "\"event_type\":\"" + eventType + "\","
+      "\"confidence\":" + String(cryConfidence) + ","
+      "\"max_temp\":" + String(maxTemp) + ","
+      "\"ammonia_ppm\":" + String(ammoniaPpm) + ","
+      "\"diaper_status\":\"" + diaperStatus + "\""
+    "}";
     
     client.println("POST /api/telemetry HTTP/1.1");
     client.println("Host: " + String(serverIP));
@@ -75,5 +68,5 @@ void loop() {
     client.stop();
   }
 
-  delay(2000); // Send update every 2 seconds
+  delay(5000); // Send update every 5 seconds
 }
