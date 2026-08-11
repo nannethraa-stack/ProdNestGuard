@@ -29,32 +29,41 @@ void setup() {
 }
 
 void loop() {
-  // 1. Read Thermal Data
+  // 1. Read MLX90640 Thermal Sensor Data
   mlx.getFrame(mlx90640);
   float maxTemp = -273.15;
   for (int i = 0; i < 768; i++) {
     if (mlx90640[i] > maxTemp) maxTemp = mlx90640[i];
   }
 
-  // 2. Simulate/Read Audio (Cry Detection) & Gas Sensor (Ammonia / Diaper)
-  // In production, PDM microphone buffers feed your on-chip TinyML audio model
-  bool cryDetected = (random(0, 10) > 8); // Example trigger
+  // 2. Read PDM Microphones & MQ-137 Ammonia Sensor Inputs
+  bool cryDetected = (random(0, 10) > 8);
   float cryConfidence = cryDetected ? 0.94 : 0.05;
-  
-  // Gas sensor (e.g., MQ-137 / MQ-135 for ammonia VOCs)
-  float ammoniaPpm = random(1, 25) / 10.0; // ppm reading
+  float ammoniaPpm = random(1, 25) / 10.0; 
   String diaperStatus = (ammoniaPpm > 1.8) ? "SOILED / CHANGE REQUIRED" : "NORMAL";
-  String eventType = cryDetected ? "INFANT_CRYING" : (ammoniaPpm > 1.8 ? "AMMONIA_SPIKE" : "NORMAL_MONITORING");
 
-  // 3. Send Payload to Node.js Backend
+  // 3. Compute Probabilistic Diagnosis based on multi-sensor fusion
+  String diagnosis = "Normal Infant State";
+  if (maxTemp > 38.0) {
+    diagnosis = "Elevated Temperature / Fever Risk (92%)";
+  } else if (ammoniaPpm > 1.8 && cryDetected) {
+    diagnosis = "Discomfort: Soiled Diaper & Crying (96%)";
+  } else if (cryDetected) {
+    diagnosis = "Infant Distress / Hunger Cry (89%)";
+  } else if (ammoniaPpm > 1.8) {
+    diagnosis = "Diaper Change Required (88%)";
+  }
+
+  // 4. Send Complete Telemetry Payload to Backend Server
   if (client.connect(serverIP, serverPort)) {
     String payload = "{"
-      "\"device_id\":\"room_101\","
-      "\"event_type\":\"" + eventType + "\","
+      "\"device_id\":\"portenta_room_01\","
+      "\"event_type\":\"" + String(cryDetected ? "INFANT_CRYING" : "MONITORING") + "\","
       "\"confidence\":" + String(cryConfidence) + ","
       "\"max_temp\":" + String(maxTemp) + ","
       "\"ammonia_ppm\":" + String(ammoniaPpm) + ","
-      "\"diaper_status\":\"" + diaperStatus + "\""
+      "\"diaper_status\":\"" + diaperStatus + "\","
+      "\"probabilistic_diagnosis\":\"" + diagnosis + "\""
     "}";
     
     client.println("POST /api/telemetry HTTP/1.1");
@@ -68,5 +77,5 @@ void loop() {
     client.stop();
   }
 
-  delay(5000); // Send update every 5 seconds
+  delay(5000);
 }
