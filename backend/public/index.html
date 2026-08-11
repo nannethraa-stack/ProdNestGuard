@@ -3,178 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NestGuard Clinical Monitoring Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>NestGuard - Hospital Monitoring Dashboard</title>
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        header { background: #004d40; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 24px; }
+        .container { display: flex; gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #00796b; color: white; }
+        .alert-row { background-color: #ffebee; }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center shadow-md">
-        <div class="flex items-center space-x-3">
-            <div class="h-3 w-3 bg-emerald-500 rounded-full animate-pulse"></div>
-            <h1 class="text-xl font-bold tracking-wide text-white">NestGuard <span class="text-indigo-400 font-light">Edge Intelligence</span></h1>
-        </div>
-        <div class="text-sm text-slate-400 flex items-center space-x-4">
-            <span>Status: <strong class="text-emerald-400">Live & Monitoring</strong></span>
-            <span id="clock" class="font-mono bg-slate-900 px-3 py-1 rounded border border-slate-700">--:--:--</span>
-        </div>
+    <header>
+        <h1>🏥 NestGuard Live Patient Monitoring Station</h1>
     </header>
 
-    <!-- Main Grid Content -->
-    <main class="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- Left 2 Columns -->
-        <div class="lg:col-span-2 space-y-6">
-            
-            <!-- Real-Time Alert Banner Card -->
-            <div id="alert-card" class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl transition-all duration-300">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Latest Telemetry Status</span>
-                        <h2 id="current-status" class="text-3xl font-extrabold text-emerald-400 mt-1">System Normal</h2>
-                    </div>
-                    <span id="device-badge" class="bg-slate-700 text-slate-300 text-xs px-3 py-1 rounded-full font-mono">Device: Waiting...</span>
-                </div>
-                <div class="mt-6 flex items-center justify-between bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
-                    <div>
-                        <p class="text-sm text-slate-400">Model Confidence Level</p>
-                        <div class="w-48 bg-slate-700 h-3 rounded-full mt-2 overflow-hidden">
-                            <div id="confidence-bar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                    <span id="confidence-text" class="text-2xl font-mono font-bold text-indigo-300">0.0%</span>
-                </div>
-            </div>
-
-            <!-- Historical Event Log Table -->
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
-                <h3 class="text-lg font-semibold text-white mb-4 flex items-center justify-between">
-                    <span>Recent Event History</span>
-                    <span class="text-xs text-slate-400 font-normal">Auto-syncing via SQLite</span>
-                </h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-slate-300">
-                        <thead class="bg-slate-900 text-slate-400 uppercase text-xs">
-                            <tr>
-                                <th class="px-4 py-3">Time</th>
-                                <th class="px-4 py-3">Device ID</th>
-                                <th class="px-4 py-3">Event Type</th>
-                                <th class="px-4 py-3">Confidence</th>
-                            </tr>
-                        </thead>
-                        <tbody id="log-table-body" class="divide-y divide-slate-700">
-                            <!-- Populated dynamically via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
+    <div class="container">
+        <div class="card">
+            <h2>Live Event & Thermal Stream</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Device ID</th>
+                        <th>Event Type</th>
+                        <th>Max Temp (°C)</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody id="event-log">
+                    <!-- Dynamic rows injected via JavaScript -->
+                </tbody>
+            </table>
         </div>
+    </div>
 
-        <!-- Right Column -->
-        <div class="space-y-6">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
-                <h3 class="text-lg font-semibold text-white mb-4">Node Diagnostics</h3>
-                <div class="space-y-4 text-sm">
-                    <div class="flex justify-between pb-3 border-b border-slate-700">
-                        <span class="text-slate-400">Audio Model</span>
-                        <span class="text-emerald-400 font-mono">INT8 TFLite Micro</span>
-                    </div>
-                    <div class="flex justify-between pb-3 border-b border-slate-700">
-                        <span class="text-slate-400">Sample Rate</span>
-                        <span class="font-mono">16,000 Hz</span>
-                    </div>
-                    <div class="flex justify-between pb-3 border-b border-slate-700">
-                        <span class="text-slate-400">Backend Storage</span>
-                        <span class="font-mono text-indigo-300">SQLite (Local)</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-400">Tunnel Protocol</span>
-                        <span class="font-mono text-indigo-300">Cloudflare Secure</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-indigo-900/40 to-slate-800 border border-indigo-500/30 rounded-xl p-6 shadow-xl">
-                <h4 class="font-semibold text-indigo-300 mb-2">Founder Access Note</h4>
-                <p class="text-sm text-slate-300 leading-relaxed">
-                    This interface is served directly from the hospital unit. Keep the local Node service active and use your secure Cloudflare link to review streams remotely.
-                </p>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Client Script -->
     <script>
         const socket = io();
+        const eventLog = document.getElementById('event-log');
 
-        setInterval(() => {
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString();
-        }, 1000);
+        // Fetch initial historical logs on load
+        fetch('/api/events')
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(row => appendEventRow(row));
+            });
 
-        async function fetchHistory() {
-            try {
-                const res = await fetch('/api/events');
-                const events = await res.json();
-                const tbody = document.getElementById('log-table-body');
-                tbody.innerHTML = '';
-                events.forEach(ev => appendEventRow(ev, false));
-            } catch (err) {
-                console.error('Failed to fetch event history:', err);
-            }
-        }
-
-        function appendEventRow(ev, prepend = true) {
-            const tbody = document.getElementById('log-table-body');
-            const tr = document.createElement('tr');
-            tr.className = "hover:bg-slate-700/50 transition-colors";
-            
-            const isCry = ev.event_type.toLowerCase().includes('cry') || ev.event_type.toLowerCase().includes('baby');
-            const badgeColor = isCry ? 'text-amber-400 bg-amber-400/10' : 'text-emerald-400 bg-emerald-400/10';
-
-            tr.innerHTML = `
-                <td class="px-4 py-3 font-mono text-xs text-slate-400">${new Date(ev.timestamp).toLocaleTimeString()}</td>
-                <td class="px-4 py-3 font-mono text-xs">${ev.device_id}</td>
-                <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-semibold ${badgeColor}">${ev.event_type}</span></td>
-                <td class="px-4 py-3 font-mono">${(ev.confidence * 100).toFixed(1)}%</td>
-            `;
-
-            if (prepend) {
-                tbody.insertBefore(tr, tbody.firstChild);
-            } else {
-                tbody.appendChild(tr);
-            }
-        }
-
+        // Listen for real-time WebSocket alerts
         socket.on('live_alert', (data) => {
-            const statusHeading = document.getElementById('current-status');
-            const alertCard = document.getElementById('alert-card');
-            const deviceBadge = document.getElementById('device-badge');
-            const confBar = document.getElementById('confidence-bar');
-            const confText = document.getElementById('confidence-text');
-
-            statusHeading.innerText = data.event_type.toUpperCase();
-            deviceBadge.innerText = `Device: ${data.device_id}`;
-            
-            const percentage = (data.confidence * 100).toFixed(1);
-            confBar.style.width = `${percentage}%`;
-            confText.innerText = `${percentage}%`;
-
-            const isCry = data.event_type.toLowerCase().includes('cry') || data.event_type.toLowerCase().includes('baby');
-            if (isCry) {
-                statusHeading.className = "text-3xl font-extrabold text-amber-400 mt-1 animate-pulse";
-                alertCard.className = "bg-slate-800 border border-amber-500/50 rounded-xl p-6 shadow-xl transition-all duration-300";
-            } else {
-                statusHeading.className = "text-3xl font-extrabold text-emerald-400 mt-1";
-                alertCard.className = "bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl transition-all duration-300";
-            }
-
             appendEventRow(data, true);
         });
 
-        fetchHistory();
+        function appendEventRow(data, isNew = false) {
+            const row = document.createElement('tr');
+            if (data.max_temp > 38.5) {
+                row.classList.add('alert-row');
+            }
+
+            row.innerHTML = `
+                <td>${new Date(data.timestamp).toLocaleTimeString()}</td>
+                <td><strong>${data.device_id}</strong></td>
+                <td>${data.event_type}</td>
+                <td>${data.max_temp !== null ? data.max_temp + ' °C' : 'N/A'}</td>
+                <td>${data.confidence ? (data.confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
+            `;
+
+            if (isNew) {
+                eventLog.prepend(row); // Add new alerts to the top
+            } else {
+                eventLog.appendChild(row);
+            }
+        }
     </script>
 </body>
 </html>
