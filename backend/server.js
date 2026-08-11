@@ -29,19 +29,24 @@ db.run(`CREATE TABLE IF NOT EXISTS events (
     device_id TEXT,
     event_type TEXT,
     confidence REAL,
+    max_temp REAL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
-// Endpoint for ESP32-S3 to push AI inference telemetry
+// Endpoint for Portenta H7 to push thermal and AI inference telemetry
 app.post('/api/telemetry', (req, res) => {
-    const { device_id, event_type, confidence } = req.body;
+    const { device_id, event_type, confidence, max_temp } = req.body;
 
-    if (!device_id || !event_type) {
-        return res.status(400).json({ error: 'Missing required telemetry fields' });
+    if (!device_id) {
+        return res.status(400).json({ error: 'Missing required device_id field' });
     }
 
-    const query = `INSERT INTO events (device_id, event_type, confidence) VALUES (?, ?, ?)`;
-    db.run(query, [device_id, event_type, confidence || 0.0], function(err) {
+    const resolvedEventType = event_type || 'thermal_monitoring';
+    const resolvedConfidence = confidence || 0.0;
+    const resolvedMaxTemp = max_temp !== undefined ? max_temp : null;
+
+    const query = `INSERT INTO events (device_id, event_type, confidence, max_temp) VALUES (?, ?, ?, ?)`;
+    db.run(query, [device_id, resolvedEventType, resolvedConfidence, resolvedMaxTemp], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -50,12 +55,13 @@ app.post('/api/telemetry', (req, res) => {
         io.emit('live_alert', {
             id: this.lastID,
             device_id,
-            event_type,
-            confidence,
+            event_type: resolvedEventType,
+            confidence: resolvedConfidence,
+            max_temp: resolvedMaxTemp,
             timestamp: new Date().toISOString()
         });
 
-        console.log(`[ALERT] Device ${device_id} -> Event: ${event_type} (${confidence})`);
+        console.log(`[TELEMETRY] Device ${device_id} -> Max Temp: ${resolvedMaxTemp}°C | Event: ${resolvedEventType}`);
         return res.status(200).json({ status: 'success', event_id: this.lastID });
     });
 });
