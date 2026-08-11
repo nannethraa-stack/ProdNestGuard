@@ -8,9 +8,7 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.json());
 app.use(cors());
@@ -18,7 +16,7 @@ app.use(cors());
 // Serve static frontend dashboard from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize SQLite Database for Event Logs
+// Initialize SQLite Database and Schema
 const db = new sqlite3.Database('./nestguard.db', (err) => {
     if (err) console.error('Database connection error:', err.message);
     else console.log('Connected to local SQLite database.');
@@ -30,38 +28,46 @@ db.run(`CREATE TABLE IF NOT EXISTS events (
     event_type TEXT,
     confidence REAL,
     max_temp REAL,
+    ammonia_ppm REAL,
+    diaper_status TEXT,
+    probabilistic_diagnosis TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
-// Endpoint for Portenta H7 to push thermal and AI inference telemetry
+// Telemetry endpoint for Portenta H7 or simulation client
 app.post('/api/telemetry', (req, res) => {
-    const { device_id, event_type, confidence, max_temp } = req.body;
+    const { device_id, event_type, confidence, max_temp, ammonia_ppm, diaper_status, probabilistic_diagnosis } = req.body;
 
     if (!device_id) {
         return res.status(400).json({ error: 'Missing required device_id field' });
     }
 
-    const resolvedEventType = event_type || 'thermal_monitoring';
-    const resolvedConfidence = confidence || 0.0;
-    const resolvedMaxTemp = max_temp !== undefined ? max_temp : null;
-
-    const query = `INSERT INTO events (device_id, event_type, confidence, max_temp) VALUES (?, ?, ?, ?)`;
-    db.run(query, [device_id, resolvedEventType, resolvedConfidence, resolvedMaxTemp], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
+    const query = `INSERT INTO events (device_id, event_type, confidence, max_temp, ammonia_ppm, diaper_status, probabilistic_diagnosis) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    db.run(query, [
+        device_id, 
+        event_type || 'MONITORING', 
+        confidence || 0.0, 
+        max_temp !== undefined ? max_temp : null, 
+        ammonia_ppm !== undefined ? ammonia_ppm : 0.0, 
+        diaper_status || 'NORMAL',
+        probabilistic_diagnosis || 'Normal State'
+    ], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
 
         // Broadcast real-time event to connected dashboards via WebSockets
         io.emit('live_alert', {
             id: this.lastID,
             device_id,
-            event_type: resolvedEventType,
-            confidence: resolvedConfidence,
-            max_temp: resolvedMaxTemp,
+            event_type: event_type || 'MONITORING',
+            confidence: confidence || 0.0,
+            max_temp,
+            ammonia_ppm,
+            diaper_status,
+            probabilistic_diagnosis: probabilistic_diagnosis || 'Normal State',
             timestamp: new Date().toISOString()
         });
 
-        console.log(`[TELEMETRY] Device ${device_id} -> Max Temp: ${resolvedMaxTemp}°C | Event: ${resolvedEventType}`);
+        console.log(`[TELEMETRY] Device ${device_id} -> Diagnosis: ${probabilistic_diagnosis}`);
         return res.status(200).json({ status: 'success', event_id: this.lastID });
     });
 });

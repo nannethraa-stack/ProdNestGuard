@@ -3,65 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NestGuard - Hospital Monitoring Dashboard</title>
+    <title>NestGuard - Complete Nursery Monitoring Station</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
         header { background: #004d40; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; }
         h1 { margin: 0; font-size: 24px; }
-        .container { display: flex; gap: 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #00796b; color: white; }
-        .alert-row { background-color: #ffebee; }
+        .alert-row { background-color: #ffebee; font-weight: bold; }
+        .badge-warning { background: #d32f2f; color: white; padding: 4px 8px; border-radius: 4px; }
+        .badge-normal { background: #388e3c; color: white; padding: 4px 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🏥 NestGuard Live Patient Monitoring Station</h1>
+        <h1>🏥 NestGuard Live Infant Monitoring Station</h1>
     </header>
 
-    <div class="container">
-        <div class="card">
-            <h2>Live Event & Thermal Stream</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Device ID</th>
-                        <th>Event Type</th>
-                        <th>Max Temp (°C)</th>
-                        <th>Confidence</th>
-                    </tr>
-                </thead>
-                <tbody id="event-log">
-                    <!-- Dynamic rows injected via JavaScript -->
-                </tbody>
-            </table>
-        </div>
+    <div class="card">
+        <h2>Real-Time Nursery Telemetry & Alerts</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Room / Device</th>
+                    <th>Event State</th>
+                    <th>Cry Confidence</th>
+                    <th>Ammonia (ppm)</th>
+                    <th>Diaper Status</th>
+                    <th>Max Temp (°C)</th>
+                </tr>
+            </thead>
+            <tbody id="event-log"></tbody>
+        </table>
     </div>
 
     <script>
         const socket = io();
         const eventLog = document.getElementById('event-log');
 
-        // Fetch initial historical logs on load
         fetch('/api/events')
             .then(res => res.json())
-            .then(data => {
-                data.forEach(row => appendEventRow(row));
-            });
+            .then(data => data.forEach(row => appendEventRow(row)));
 
-        // Listen for real-time WebSocket alerts
         socket.on('live_alert', (data) => {
             appendEventRow(data, true);
         });
 
         function appendEventRow(data, isNew = false) {
             const row = document.createElement('tr');
-            if (data.max_temp > 38.5) {
+            const isAlert = data.diaper_status?.includes('SOILED') || data.event_type?.includes('CRYING') || data.max_temp > 38.5;
+            
+            if (isAlert) {
                 row.classList.add('alert-row');
             }
 
@@ -69,12 +66,14 @@
                 <td>${new Date(data.timestamp).toLocaleTimeString()}</td>
                 <td><strong>${data.device_id}</strong></td>
                 <td>${data.event_type}</td>
-                <td>${data.max_temp !== null ? data.max_temp + ' °C' : 'N/A'}</td>
-                <td>${data.confidence ? (data.confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
+                <td>${data.confidence > 0.5 ? (data.confidence * 100).toFixed(0) + '%' : 'Silent'}</td>
+                <td>${data.ammonia_ppm !== undefined ? data.ammonia_ppm + ' ppm' : 'N/A'}</td>
+                <td><span class="${data.diaper_status?.includes('SOILED') ? 'badge-warning' : 'badge-normal'}">${data.diaper_status || 'NORMAL'}</span></td>
+                <td>${data.max_temp !== null ? data.max_temp.toFixed(1) + ' °C' : 'N/A'}</td>
             `;
 
             if (isNew) {
-                eventLog.prepend(row); // Add new alerts to the top
+                eventLog.prepend(row);
             } else {
                 eventLog.appendChild(row);
             }
