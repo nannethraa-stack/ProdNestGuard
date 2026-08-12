@@ -6,11 +6,7 @@
 #include "cry_model_data.h"
 
 // Set to 1 once physical vision model weights and camera libraries are calibrated on hardware
-<<<<<<< HEAD
 #define VISION_MODEL_AVAILABLE 1
-=======
-#define VISION_MODEL_AVAILABLE 0
->>>>>>> fd5437b231bf7f28db5f088e03aea16c127068a9
 
 #if VISION_MODEL_AVAILABLE
 #include <Camera.h>
@@ -131,8 +127,4 @@ void sendTelemetryPayload(SensorData data) {
         Serial.printf("[HTTP Error] Failed: %s\n", http.errorToString(httpResponseCode).c_str());
     }
     http.end();
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> fd5437b231bf7f28db5f088e03aea16c127068a9
