@@ -24,7 +24,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
-// Create telemetry table if it doesn't exist
+// Create telemetry table if it doesn't exist (with expanded vision tracking support)
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS telemetry (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
