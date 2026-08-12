@@ -216,4 +216,8 @@ if (require.main === module) {
     });
 }
 
+<<<<<<< HEAD
 module.exports = { app, server, db };
+=======
+module.exports = { app, server, db };
+>>>>>>> fd5437b231bf7f28db5f088e03aea16c127068a9
