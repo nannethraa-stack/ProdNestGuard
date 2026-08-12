@@ -1,19 +1,25 @@
 {
-  "name": "nestguard_backend",
+  "name": "prod-nest-guard-backend",
   "version": "1.0.0",
+  "description": "Backend API and WebSocket server for ProdNestGuard",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^16.6.1",
-    "express": "^4.22.2",
-    "socket.io": "^4.8.3",
-    "sqlite3": "^5.1.7"
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "socket.io": "^4.7.5"
   },
-  "keywords": [],
+  "keywords": [
+    "iot",
+    "baby-monitor",
+    "security"
+  ],
   "author": "",
-  "license": "ISC",
-  "description": ""
+  "license": "ISC"
 }
