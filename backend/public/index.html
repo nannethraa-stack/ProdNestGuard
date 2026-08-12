@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NestGuard Live Infant Monitoring Station</title>
-    <!-- Bootstrap CSS for clean hospital-grade UI styling -->
+    <title>NestGuard Enterprise Infant Monitoring Station</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <div class="container-fluid py-4">
-        <div class="p-3 mb-4 bg-success text-white rounded shadow-sm">
-            <h2 class="mb-0">🏥 NestGuard Live Infant Monitoring Station (Dual AI - Audio & Vision)</h2>
+        <div class="p-3 mb-4 bg-success text-white rounded shadow-sm d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">🏥 NestGuard Enterprise Infant Monitoring Station</h2>
+            <div>
+                <button id="enable-audio-btn" class="btn btn-light btn-sm me-2">🔊 Enable Audio Alarms</button>
+                <span id="connection-status" class="badge bg-light text-dark fs-6">Live Online</span>
+            </div>
         </div>
 
         <div class="card shadow-sm">
@@ -31,7 +34,7 @@
                             </tr>
                         </thead>
                         <tbody id="telemetry-table-body">
-                            <!-- Live data rows will be dynamically injected here -->
+                            <!-- Rows injected safely via textContent -->
                         </tbody>
                     </table>
                 </div>
@@ -39,21 +42,57 @@
         </div>
     </div>
 
-    <!-- Socket.io client script served automatically by the backend -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        let audioCtx = null;
 
-        socket.on('telemetry_update', function(data) {
+        document.getElementById('enable-audio-btn').addEventListener('click', () => {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            document.getElementById('enable-audio-btn').textContent = '🔊 Audio Enabled';
+            document.getElementById('enable-audio-btn').classList.replace('btn-light', 'btn-outline-light');
+        });
+
+        function playCriticalAlertSound() {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } catch (err) {
+                console.error('Audio playback error:', err);
+            }
+        }
+
+        function renderRow(data, prepend = true) {
             const tbody = document.getElementById('telemetry-table-body');
             const row = document.createElement('tr');
 
-            // Dynamically assign badge colors based on 4-class audio, thermal, and vision safety event types
             let badgeClass = 'bg-secondary';
             const eventStr = (data.event_type || '').toUpperCase();
+            const isCritical = eventStr.includes('PAIN') || 
+                             eventStr.includes('OBSTRUCTION') || 
+                             eventStr.includes('DOWN') || 
+                             eventStr.includes('THERMAL') || 
+                             eventStr.includes('AMMONIA') || 
+                             eventStr.includes('CRITICAL');
 
-            if (eventStr.includes('PAIN') || eventStr.includes('OBSTRUCTION') || eventStr.includes('DOWN') || eventStr.includes('THERMAL') || eventStr.includes('AMMONIA') || eventStr.includes('CRITICAL')) {
+            if (isCritical) {
                 badgeClass = 'bg-danger';
+                playCriticalAlertSound();
             } else if (eventStr.includes('HUNGER') || eventStr.includes('PARTIALLY')) {
                 badgeClass = 'bg-warning text-dark';
             } else if (eventStr.includes('DISCOMFORT') || eventStr.includes('CLEAR')) {
@@ -62,23 +101,59 @@
                 badgeClass = 'bg-success';
             }
 
-            const timestamp = new Date().toLocaleTimeString();
-            const confidenceVal = data.confidence ? (data.confidence * 100).toFixed(1) + '%' : 'N/A';
+            const timeStr = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const confidenceVal = data.confidence !== undefined ? (data.confidence * 100).toFixed(1) + '%' : 'N/A';
 
-            row.innerHTML = `
-                <td>${timestamp}</td>
-                <td><strong>${data.device_id || 'portenta_room_01'}</strong></td>
-                <td><span class="badge ${badgeClass}">${data.event_type}</span></td>
-                <td>${confidenceVal}</td>
-                <td><strong>${data.probabilistic_diagnosis || 'Normal'}</strong></td>
-                <td>${data.ammonia_ppm ?? 0.0} ppm</td>
-                <td><span class="badge ${data.diaper_status && data.diaper_status.includes('SOILED') ? 'bg-danger' : 'bg-success'}">${data.diaper_status || 'NORMAL'}</span></td>
-                <td>${data.max_temp ?? 0.0} °C</td>
-            `;
+            // Safe DOM Construction using createElement and textContent (Zero XSS vulnerability)
+            const tdTime = document.createElement('td'); tdTime.textContent = timeStr;
+            const tdDevice = document.createElement('td'); const strongDev = document.createElement('strong'); strongDev.textContent = data.device_id || 'portenta_room_01'; tdDevice.appendChild(strongDev);
+            
+            const tdEvent = document.createElement('td');
+            const spanBadge = document.createElement('span'); spanBadge.className = `badge ${badgeClass}`; spanBadge.textContent = data.event_type;
+            tdEvent.appendChild(spanBadge);
 
-            // Insert new live updates at the top of the table
-            tbody.prepend(row);
+            const tdConf = document.createElement('td'); tdConf.textContent = confidenceVal;
+            const tdDiag = document.createElement('td'); const strongDiag = document.createElement('strong'); strongDiag.textContent = data.probabilistic_diagnosis || 'Normal'; tdDiag.appendChild(strongDiag);
+            const tdAmmonia = document.createElement('td'); tdAmmonia.textContent = `${data.ammonia_ppm ?? 0.0} ppm`;
+            
+            const tdDiaper = document.createElement('td');
+            const spanDiaper = document.createElement('span');
+            spanDiaper.className = `badge ${data.diaper_status && data.diaper_status.includes('SOILED') ? 'bg-danger' : 'bg-success'}`;
+            spanDiaper.textContent = data.diaper_status || 'NORMAL';
+            tdDiaper.appendChild(spanDiaper);
+
+            const tdTemp = document.createElement('td'); tdTemp.textContent = `${data.max_temp ?? 0.0} °C`;
+
+            row.append(tdTime, tdDevice, tdEvent, tdConf, tdDiag, tdAmmonia, tdDiaper, tdTemp);
+
+            if (prepend) {
+                tbody.prepend(row);
+                if (tbody.rows.length > 100) tbody.deleteRow(tbody.rows.length - 1);
+            } else {
+                tbody.appendChild(row);
+            }
+        }
+
+        // Fetch and load initial telemetry history on page load
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/telemetry?limit=50');
+                const history = await res.json();
+                history.reverse().forEach(record => renderRow(record, false));
+            } catch (err) {
+                console.error('Failed to load history:', err);
+            }
+        }
+
+        socket.on('connect', () => {
+            socket.emit('subscribe', 'all_devices');
         });
+
+        socket.on('telemetry_update', function(data) {
+            renderRow(data, true);
+        });
+
+        loadHistory();
     </script>
 </body>
 </html>
