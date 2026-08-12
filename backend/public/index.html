@@ -10,7 +10,7 @@
 <body class="bg-light">
     <div class="container-fluid py-4">
         <div class="p-3 mb-4 bg-success text-white rounded shadow-sm">
-            <h2 class="mb-0">🏥 NestGuard Live Infant Monitoring Station (4-Class AI)</h2>
+            <h2 class="mb-0">🏥 NestGuard Live Infant Monitoring Station (Dual AI - Audio & Vision)</h2>
         </div>
 
         <div class="card shadow-sm">
@@ -24,7 +24,7 @@
                                 <th>Room / Device</th>
                                 <th>Event State</th>
                                 <th>Confidence</th>
-                                <th>Probabilistic Diagnosis (4-Class)</th>
+                                <th>Probabilistic Diagnosis</th>
                                 <th>Ammonia (ppm)</th>
                                 <th>Diaper Status</th>
                                 <th>Max Temp (°C)</th>
@@ -48,16 +48,18 @@
             const tbody = document.getElementById('telemetry-table-body');
             const row = document.createElement('tr');
 
-            // Dynamically assign badge colors based on 4-class event types
+            // Dynamically assign badge colors based on 4-class audio, thermal, and vision safety event types
             let badgeClass = 'bg-secondary';
-            if (data.event_type.includes('PAIN')) {
+            const eventStr = (data.event_type || '').toUpperCase();
+
+            if (eventStr.includes('PAIN') || eventStr.includes('OBSTRUCTION') || eventStr.includes('DOWN') || eventStr.includes('THERMAL') || eventStr.includes('AMMONIA') || eventStr.includes('CRITICAL')) {
                 badgeClass = 'bg-danger';
-            } else if (data.event_type.includes('HUNGER')) {
+            } else if (eventStr.includes('HUNGER') || eventStr.includes('PARTIALLY')) {
                 badgeClass = 'bg-warning text-dark';
-            } else if (data.event_type.includes('DISCOMFORT')) {
+            } else if (eventStr.includes('DISCOMFORT') || eventStr.includes('CLEAR')) {
                 badgeClass = 'bg-info text-dark';
-            } else if (data.event_type.includes('THERMAL') || data.event_type.includes('AMMONIA')) {
-                badgeClass = 'bg-danger';
+            } else if (eventStr.includes('MONITORING') || eventStr.includes('NORMAL')) {
+                badgeClass = 'bg-success';
             }
 
             const timestamp = new Date().toLocaleTimeString();
@@ -69,9 +71,9 @@
                 <td><span class="badge ${badgeClass}">${data.event_type}</span></td>
                 <td>${confidenceVal}</td>
                 <td><strong>${data.probabilistic_diagnosis || 'Normal'}</strong></td>
-                <td>${data.ammonia_ppm} ppm</td>
-                <td><span class="badge ${data.diaper_status && data.diaper_status.includes('SOILED') ? 'bg-danger' : 'bg-success'}">${data.diaper_status}</span></td>
-                <td>${data.max_temp} °C</td>
+                <td>${data.ammonia_ppm ?? 0.0} ppm</td>
+                <td><span class="badge ${data.diaper_status && data.diaper_status.includes('SOILED') ? 'bg-danger' : 'bg-success'}">${data.diaper_status || 'NORMAL'}</span></td>
+                <td>${data.max_temp ?? 0.0} °C</td>
             `;
 
             // Insert new live updates at the top of the table
